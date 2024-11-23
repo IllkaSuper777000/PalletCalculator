@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            width: 100%; margin-right: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .truck-container {
+            display: flex;
+            gap: 25px !important;
+            align-items: flex-start;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            position: relative;
+        }
+        .truck {
+            position: relative;
+        }
+        .truck-top-view {
+            background-color: #d3d3d3;
+            position: relative;
+            border: 1px solid black;
+            box-sizing: border-box;
+            margin-bottom: 25px !important;
+            overflow: visible;
+            margin-right: 25px !important; /* Значно збільшуємо відступ між трейлером і інформаційним блоком */
+        }
+        .pallet {
+            margin: 0px;
+            position: absolute;
+            border: 1px solid #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: white;
+        }
+        .pallet-inside {
+            background-color: green;
+        }
+        .pallet-outside {
+            background-color: red;
+            z-index: 1;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #fff;
+            max-width: 300px; margin-left: 50px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 2;
+            position: relative;
+        }
+        .info h2 {
+            margin: 0 0 10px;
+            color: #007bff;
+        }
+        .info p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .info .pallet-group {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        .btn-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .footer {
+            margin-top: 50px;
+            padding: 20px;
+            background-color: #f4f4f4;
+            text-align: center;
+            width: 100%;
+        }
+        .footer p {
+            color: #777;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Results</h1>
+        <div class="truck-container">
+            <div class="truck">
+                <div class="truck-top-view" id="truck-top-view"></div>
+            </div>
+
+            <div class="info">
+                <h2>Trailer Information</h2>
+                <div id="truck-info">
+                    <p><strong>Length:</strong> <span id="truck-length">{{ truck.length }}</span> in</p>
+                    <p><strong>Width:</strong> <span id="truck-width">{{ truck.width }}</span> in</p>
+                </div>
+
+                <h2>Pallet Information</h2>
+                <div id="pallets-info">
+                    {% for pallet in pallets %}
+                    <div class="pallet-group" id="pallet-group-{{ loop.index }}">
+                        <p><strong>Pallet {{ loop.index }} Length:</strong> <span id="pallet-{{ loop.index }}-length">{{ pallet.length }}</span> in</p>
+                        <p><strong>Pallet {{ loop.index }} Width:</strong> <span id="pallet-{{ loop.index }}-width">{{ pallet.width }}</span> in</p>
+                        <button class="btn delete-pallet-btn" data-index="{{ loop.index }}">Delete</button>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <p><strong>Pallet Count:</strong> <span id="pallet-count">{{ pallet_count }}</span></p>
+
+                <div class="btn-container">
+                    <button class="btn" id="add-pallet-btn">+</button>
+                    <button class="btn" id="edit-btn">Edit</button>
+                    <button class="btn" id="apply-btn" style="display:none;">Apply</button>
+                </div>
+            </div>
+        </div>
+
+        <a href="{{ url_for('index') }}">Back to form</a>
+    </div>
+
+    <div class="footer">
+        <p>&copy; 2024 Pallet Calculator. All rights reserved.</p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const truck = {
+                length: {{ truck.length }},
+                width: {{ truck.width }}
+            };
+
+            let palletCount = {{ pallet_count }};
+            let pallets = {{ pallets | tojson }};
+            const topView = document.getElementById('truck-top-view');
+            const addPalletBtn = document.getElementById('add-pallet-btn');
+            const editBtn = document.getElementById('edit-btn');
+            const applyBtn = document.getElementById('apply-btn');
+            const palletsInfo = document.getElementById('pallets-info');
+
+            // Переводимо розміри вантажівки в пікселі (дюйми -> пікселі)
+            const truckWidthInPixels = truck.width * 2.54;
+            const truckLengthInPixels = truck.length * 2.54;
+            topView.style.width = truckWidthInPixels + 'px';
+            topView.style.height = truckLengthInPixels + 'px';
+
+            let placedPallets = [];
+
+            function renderPallets() {
+                topView.innerHTML = '';
+                placedPallets = [];
+
+                pallets.forEach((pallet, index) => {
+                    const palletDiv = document.createElement('div');
+
+                    // Конвертація розмірів палет у пікселі
+                    const palletWidth = pallet.width * 2.54;
+                    const palletHeight = pallet.length * 2.54;
+
+                    let x = pallet.x !== undefined ? pallet.x : 0;
+                    let y = pallet.y !== undefined ? pallet.y : 0;
+                    let isOutside = false;
+
+                    // Перевіряємо, чи палета вміщується в трейлер
+                    if (palletWidth > truckWidthInPixels || palletHeight > truckLengthInPixels) {
+                        isOutside = true;
+                    } else {
+                        const closestSpace = pallet.x !== undefined && pallet.y !== undefined ? { x, y } : findClosestSpace(palletWidth, palletHeight);
+                        if (closestSpace) {
+                            ({ x, y } = closestSpace);
+                        } else {
+                            isOutside = true;
+                        }
+                    }
+
+                    palletDiv.style.position = 'absolute';
+                    palletDiv.style.border = '1px solid #000';
+                    palletDiv.style.width = palletWidth + 'px';
+                    palletDiv.style.height = palletHeight + 'px';
+                    palletDiv.style.left = x + 'px';
+                    palletDiv.style.top = y + 'px';
+                    palletDiv.textContent = index + 1;
+
+                    if (isOutside) {
+                        palletDiv.className = 'pallet pallet-outside';
+                    } else {
+                        palletDiv.className = 'pallet pallet-inside';
+                        placedPallets.push({ x, y, width: palletWidth, height: palletHeight });
+                    }
+
+                    pallet.x = x;
+                    pallet.y = y;
+                    topView.appendChild(palletDiv);
+                });
+            }
+
+            function findClosestSpace(palletWidth, palletHeight) {
+                for (let y = 0; y <= truckLengthInPixels - palletHeight; y++) {
+                    for (let x = 0; x <= truckWidthInPixels - palletWidth; x++) {
+                        if (!isOverlapping(x, y, palletWidth, palletHeight)) {
+                            return { x, y };
+                        }
+                    }
+                }
+                return null;
+            }
+
+            function isOverlapping(newPalletX, newPalletY, newPalletWidth, newPalletHeight) {
+                return placedPallets.some(p => {
+                    return (
+                        newPalletX < p.x + p.width &&
+                        newPalletX + newPalletWidth > p.x &&
+                        newPalletY < p.y + p.height &&
+                        newPalletY + newPalletHeight > p.y
+                    );
+                });
+            }
+
+            // Додаємо нову палету при натисканні на кнопку
+            addPalletBtn.addEventListener('click', function () {
+                palletCount++;
+                pallets.push({ length: 50, width: 50 }); // Додаємо палету за замовчуванням розміром 50x50 інчів
+                const palletGroup = document.createElement('div');
+                palletGroup.classList.add('pallet-group');
+                palletGroup.id = `pallet-group-${palletCount}`;
+                palletGroup.innerHTML = `
+                    <p><strong>Pallet ${palletCount} Length:</strong> <span id="pallet-${palletCount}-length">50</span> in</p>
+                    <p><strong>Pallet ${palletCount} Width:</strong> <span id="pallet-${palletCount}-width">50</span> in</p>
+                    <button class="btn delete-pallet-btn" data-index="${palletCount - 1}">Delete</button>
+                `;
+                palletsInfo.appendChild(palletGroup);
+                document.getElementById('pallet-count').textContent = palletCount;
+                renderPallets();
+            });
+
+            // Видалення палети
+            palletsInfo.addEventListener('click', function(e) {
+                if (e.target.classList.contains('delete-pallet-btn')) {
+                    const index = parseInt(e.target.getAttribute('data-index'), 10);
+                    pallets.splice(index, 1);
+                    palletCount--;
+                    document.getElementById('pallet-count').textContent = palletCount;
+                    renderPalletInfo();
+                    renderPallets();
+                }
+            });
+
+            function renderPalletInfo() {
+                palletsInfo.innerHTML = '';
+                pallets.forEach((pallet, index) => {
+                    const palletGroup = document.createElement('div');
+                    palletGroup.classList.add('pallet-group');
+                    palletGroup.id = `pallet-group-${index + 1}`;
+                    palletGroup.innerHTML = `
+                        <p><strong>Pallet ${index + 1} Length:</strong> <span id="pallet-${index + 1}-length">${pallet.length}</span> in</p>
+                        <p><strong>Pallet ${index + 1} Width:</strong> <span id="pallet-${index + 1}-width">${pallet.width}</span> in</p>
+                        <button class="btn delete-pallet-btn" data-index="${index}">Delete</button>
+                    `;
+                    palletsInfo.appendChild(palletGroup);
+                });
+            }
+
+            // Перехід у режим редагування
+            editBtn.addEventListener('click', function () {
+                editBtn.style.display = 'none';
+                applyBtn.style.display = 'block';
+
+                // Заміна span на input для редагування розмірів палет
+                pallets.forEach((pallet, index) => {
+                    const lengthSpan = document.getElementById(`pallet-${index + 1}-length`);
+                    const widthSpan = document.getElementById(`pallet-${index + 1}-width`);
+                    const lengthInput = document.createElement('input');
+                    const widthInput = document.createElement('input');
+
+                    lengthInput.type = 'number';
+                    lengthInput.value = pallet.length;
+                    lengthInput.id = `pallet-${index + 1}-length-input`;
+                    lengthInput.step = '0.01';
+                    widthInput.type = 'number';
+                    widthInput.value = pallet.width;
+                    widthInput.id = `pallet-${index + 1}-width-input`;
+                    widthInput.step = '0.01';
+
+                    lengthSpan.parentNode.replaceChild(lengthInput, lengthSpan);
+                    widthSpan.parentNode.replaceChild(widthInput, widthSpan);
+                });
+            });
+
+            // Застосування змін після редагування
+            applyBtn.addEventListener('click', function () {
+                applyBtn.style.display = 'none';
+                editBtn.style.display = 'block';
+
+                pallets.forEach((pallet, index) => {
+                    const lengthInput = document.getElementById(`pallet-${index + 1}-length-input`);
+                    const widthInput = document.getElementById(`pallet-${index + 1}-width-input`);
+                    pallet.length = parseFloat(lengthInput.value);
+                    pallet.width = parseFloat(widthInput.value);
+
+                    const lengthSpan = document.createElement('span');
+                    const widthSpan = document.createElement('span');
+                    lengthSpan.id = `pallet-${index + 1}-length`;
+                    widthSpan.id = `pallet-${index + 1}-width`;
+                    lengthSpan.textContent = pallet.length;
+                    widthSpan.textContent = pallet.width;
+
+                    lengthInput.parentNode.replaceChild(lengthSpan, lengthInput);
+                    widthInput.parentNode.replaceChild(widthSpan, widthInput);
+                });
+                renderPalletInfo();
+                renderPallets();
+            });
+
+            renderPallets();
+        });
+    </script>
+</body>
+</html>
